@@ -1,0 +1,16 @@
+.git
+.env
+.venv
+venv
+**/__pycache__
+**/.adk
+generated
+evals
+dbt_vault
+data
+setup
+teardown
+docs
+*.md
+!de_context/*.md
+!agents/**/*.md

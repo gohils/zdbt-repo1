@@ -1,0 +1,14 @@
+# Uses Application Default Credentials (your own login locally,
+# the service account on Cloud Run). No keys in the repo.
+de_vault:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GOOGLE_CLOUD_PROJECT') }}"
+      dataset: "{{ env_var('BQ_VAULT_DATASET', 'demo_vault') }}"
+      location: "{{ env_var('BQ_LOCATION', 'US') }}"
+      threads: 4
+      job_execution_timeout_seconds: 300
+      maximum_bytes_billed: 10000000000

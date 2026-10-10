@@ -1,0 +1,81 @@
+# Evaluation questions. The same set runs against every agent so you can see
+# quality improve as context is added (module 6).
+#
+# Scoring (deliberately simple and transparent):
+#   expect_all   - every item must appear in the answer (case-insensitive);
+#                  an item with " | " passes if ANY alternative appears.
+#   expect_tools - at least one of these tools must have been called.
+# A question passes when both checks pass.
+
+questions:
+  - id: std-hashing
+    category: standards (vector RAG)
+    question: What hashing algorithm and null handling do we use for Data Vault hash keys?
+    expect_all: ["MD5", "^^", "trim", "upper"]
+    expect_tools: [search_docs]
+
+  - id: std-reload
+    category: standards (vector RAG)
+    question: How must a satellite handle a record that is reloaded with no changes?
+    expect_all: ["hashdiff", "no new | not create | must not | does not create | should not"]
+    expect_tools: [search_docs]
+
+  - id: std-hashdiff-order
+    category: standards (vector RAG)
+    question: In which order are columns combined when computing a hashdiff?
+    expect_all: ["alphabetical"]
+    expect_tools: [search_docs]
+
+  - id: glossary-active
+    category: glossary (vector RAG)
+    question: What is our definition of an active customer and which column implements it?
+    expect_all: ["90", "is_active"]
+    expect_tools: [search_docs]
+
+  - id: spec-status
+    category: source spec (vector RAG)
+    question: Which order status transitions are allowed in the web shop?
+    expect_all: ["CREATED", "PAID", "SHIPPED", "CANCELLED"]
+    expect_tools: [search_docs, execute_sql]
+
+  - id: impact-customer-id
+    category: impact analysis (graph)
+    question: If the customer_id column in crm_customers changes format, which models downstream are affected?
+    expect_all: ["hub_customer", "dim_customer", "sat_customer_details"]
+    expect_tools: [get_lineage, get_column_context]
+
+  - id: upstream-fct
+    category: root cause (graph)
+    question: Which source tables does fct_order_lines ultimately depend on?
+    expect_all: ["shop_order_lines", "shop_orders", "shop_products"]
+    expect_tools: [get_lineage]
+
+  - id: join-lines-customers
+    category: join path (graph)
+    question: How do I join shop_order_lines to crm_customers? Give the join conditions.
+    expect_all: ["shop_orders", "order_id", "customer_id"]
+    expect_tools: [find_join_path]
+
+  - id: sql-segment-shipped
+    category: NL to SQL (GraphRAG)
+    question: What is the total order value of shipped orders by customer segment? Show the SQL you used.
+    expect_all: ["segment", "line_amount", "SHIPPED", "dim_customer"]
+    expect_tools: [execute_sql]
+
+  - id: sql-active-customers
+    category: NL to SQL (GraphRAG)
+    question: How many active customers do we have per country?
+    expect_all: ["is_active", "country"]
+    expect_tools: [execute_sql]
+
+  - id: onboarding-hub
+    category: engineering (GraphRAG)
+    question: A new billing source has a column cust_ref holding the CRM customer number, sometimes in lower case with spaces. Which hub should it load into and how is the key hashed?
+    expect_all: ["hub_customer", "MD5", "trim | TRIM"]
+    expect_tools: [search_docs]
+
+  - id: generation-order
+    category: synthetic data (graph)
+    question: In which order must synthetic source tables be generated to keep referential integrity?
+    expect_all: ["crm_customers", "shop_products", "shop_orders", "shop_order_lines"]
+    expect_tools: [get_generation_order, find_join_path, get_lineage, get_column_context]

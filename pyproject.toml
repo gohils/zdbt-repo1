@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "de-context"
+version = "0.1.0"
+description = "Shared BigQuery context tools (vector RAG, graph, GraphRAG) for ADK data engineering agents"
+requires-python = ">=3.10"
+dependencies = [
+  "google-adk>=1.20",
+  "google-cloud-bigquery>=3.25",
+  "python-dotenv>=1.0",
+  "pyyaml>=6.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["de_context*"]
+
+[tool.setuptools.package-data]
+de_context = ["*.md"]

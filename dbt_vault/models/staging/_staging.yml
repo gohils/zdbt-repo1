@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: stg_crm_customers
+    description: Staged CRM customers with customer_hk, customer_hashdiff and load metadata.
+    columns:
+      - {name: customer_hk, data_type: STRING, description: "Hash key of customer_id (MD5 standard)."}
+      - {name: customer_id, data_type: STRING, description: "Cleaned business key (trimmed, upper case)."}
+      - {name: is_valid_bk, data_type: BOOL, description: "FALSE when the business key is NULL or blank."}
+      - {name: segment, data_type: STRING, description: "Customer segment."}
+      - {name: is_deleted, data_type: BOOL, description: "Soft-delete flag from the CRM."}
+      - {name: customer_hashdiff, data_type: STRING, description: "Hashdiff of descriptive customer attributes."}
+      - {name: load_ts, data_type: TIMESTAMP, description: "Load timestamp of the batch."}
+      - {name: record_source, data_type: STRING, description: "Source system and table."}
+
+  - name: stg_shop_products
+    description: Staged products with product_hk and product_hashdiff.
+    columns:
+      - {name: product_hk, data_type: STRING, description: "Hash key of product_id."}
+      - {name: product_id, data_type: STRING, description: "Cleaned product business key."}
+      - {name: product_hashdiff, data_type: STRING, description: "Hashdiff of product attributes."}
+      - {name: load_ts, data_type: TIMESTAMP, description: "Load timestamp."}
+
+  - name: stg_shop_orders
+    description: Staged orders with order_hk, customer_hk and the order-customer link hash key.
+    columns:
+      - {name: order_hk, data_type: STRING, description: "Hash key of order_id."}
+      - {name: customer_hk, data_type: STRING, description: "Hash key of the buyer's customer_id."}
+      - {name: order_customer_hk, data_type: STRING, description: "Link hash key of (order_id, customer_id)."}
+      - {name: order_id, data_type: STRING, description: "Cleaned order business key."}
+      - {name: customer_id, data_type: STRING, description: "Cleaned customer business key."}
+      - {name: status, data_type: STRING, description: "Order status."}
+      - {name: order_hashdiff, data_type: STRING, description: "Hashdiff of order attributes."}
+      - {name: load_ts, data_type: TIMESTAMP, description: "Load timestamp."}
+
+  - name: stg_shop_order_lines
+    description: Staged order lines with link and hub hash keys.
+    columns:
+      - {name: order_line_hk, data_type: STRING, description: "Link hash key of (order_id, product_id, order_line_id)."}
+      - {name: order_hk, data_type: STRING, description: "Hash key of order_id."}
+      - {name: product_hk, data_type: STRING, description: "Hash key of product_id."}
+      - {name: order_line_id, data_type: STRING, description: "Line identifier (dependent child key)."}
+      - {name: quantity, data_type: INT64, description: "Units ordered."}
+      - {name: unit_price, data_type: NUMERIC, description: "Price per unit."}
+      - {name: order_line_hashdiff, data_type: STRING, description: "Hashdiff of line attributes."}
+      - {name: load_ts, data_type: TIMESTAMP, description: "Load timestamp."}

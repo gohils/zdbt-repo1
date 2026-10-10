@@ -1,0 +1,65 @@
+version: 2
+
+models:
+  - name: dim_customer
+    description: >
+      Current customer attributes with order activity. Use for customer
+      reporting (segment, country, active customers).
+    columns:
+      - name: customer_hk
+        data_type: STRING
+        description: Customer hash key. Primary key.
+        data_tests: [unique, not_null]
+      - {name: customer_id, data_type: STRING, description: "CRM customer number."}
+      - {name: segment, data_type: STRING, description: "Current customer segment (CONSUMER, SMALL_BUSINESS, ENTERPRISE)."}
+      - {name: country, data_type: STRING, description: "Current country code."}
+      - {name: email, data_type: STRING, description: "Current email address."}
+      - {name: is_deleted, data_type: BOOL, description: "TRUE when soft-deleted in the CRM."}
+      - {name: first_order_date, data_type: DATE, description: "Date of the first non-cancelled order."}
+      - {name: last_order_date, data_type: DATE, description: "Date of the latest non-cancelled order."}
+      - {name: order_count, data_type: INT64, description: "Number of non-cancelled orders."}
+      - {name: is_active, data_type: BOOL, description: "Active customer flag (see glossary: active customer)."}
+
+  - name: dim_product
+    description: Current product attributes.
+    columns:
+      - name: product_hk
+        data_type: STRING
+        description: Product hash key. Primary key.
+        data_tests: [unique, not_null]
+      - {name: product_id, data_type: STRING, description: "Product code."}
+      - {name: product_name, data_type: STRING, description: "Product name."}
+      - {name: category, data_type: STRING, description: "Product category."}
+      - {name: list_price, data_type: NUMERIC, description: "Current list price."}
+
+  - name: fct_order_lines
+    description: >
+      One row per order line with the current order status and line amount.
+      Use for revenue and order value reporting; join to dim_customer and
+      dim_product on the hash keys.
+    columns:
+      - name: order_line_hk
+        data_type: STRING
+        description: Order line hash key. Primary key.
+        data_tests: [unique, not_null]
+      - {name: order_line_id, data_type: STRING, description: "Order line identifier."}
+      - {name: order_id, data_type: STRING, description: "Order number."}
+      - {name: order_hk, data_type: STRING, description: "Order hash key."}
+      - name: customer_hk
+        data_type: STRING
+        description: Customer hash key of the buyer.
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_customer'), field: customer_hk}
+      - name: product_hk
+        data_type: STRING
+        description: Product hash key.
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_product'), field: product_hk}
+      - {name: order_date, data_type: DATE, description: "Order date."}
+      - {name: status, data_type: STRING, description: "Current order status."}
+      - {name: currency, data_type: STRING, description: "Currency code."}
+      - {name: quantity, data_type: INT64, description: "Units ordered."}
+      - {name: unit_price, data_type: NUMERIC, description: "Price per unit."}
+      - {name: line_amount, data_type: NUMERIC, description: "quantity * unit_price (order value of the line)."}
