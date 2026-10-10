@@ -13,3 +13,4 @@ dbt_vault/dbt_packages/
 logs/
 .DS_Store
 .pytest_cache/
+dbt_vault/.user.yml
