@@ -1,0 +1,171 @@
+version: 2
+
+# Source tables are loaded in batches. Every row carries load_batch and load_ts.
+# Relationships tests here declare the source foreign keys. They feed the
+# context graph (JOINS_TO edges) and validate synthetic data.
+
+sources:
+  - name: crm
+    description: Customer master data from the CRM system.
+    schema: "{{ env_var('BQ_SOURCE_DATASET', 'demo_source') }}"
+    tables:
+      - name: crm_customers
+        description: >
+          One row per customer per load batch. A customer appears again in a
+          later batch when any attribute changes, or as an unchanged reload.
+          Business key is customer_id (format C + 6 digits, e.g. C000123).
+        columns:
+          - name: customer_id
+            data_type: STRING
+            description: CRM customer number. Business key of the customer.
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: first_name
+            data_type: STRING
+            description: Customer first name (fake data).
+          - name: last_name
+            data_type: STRING
+            description: Customer last name (fake data).
+          - name: email
+            data_type: STRING
+            description: Customer email address (fake, example.com domains only).
+          - name: segment
+            data_type: STRING
+            description: Customer segment used for reporting.
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ["CONSUMER", "SMALL_BUSINESS", "ENTERPRISE"]
+                  config: {severity: warn}
+          - name: country
+            data_type: STRING
+            description: ISO 3166-1 alpha-2 country code.
+          - name: created_at
+            data_type: TIMESTAMP
+            description: When the customer was created in the CRM.
+          - name: is_deleted
+            data_type: BOOL
+            description: Soft-delete flag. TRUE when the customer was deleted in the CRM.
+          - name: load_batch
+            data_type: INT64
+            description: Load batch number (1, 2, 3, ...).
+          - name: load_ts
+            data_type: TIMESTAMP
+            description: Timestamp when the batch was loaded.
+
+  - name: shop
+    description: Orders and products from the web shop system.
+    schema: "{{ env_var('BQ_SOURCE_DATASET', 'demo_source') }}"
+    tables:
+      - name: shop_products
+        description: Product catalogue. Business key is product_id (format P + 4 digits).
+        columns:
+          - name: product_id
+            data_type: STRING
+            description: Product code. Business key of the product.
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: product_name
+            data_type: STRING
+            description: Product display name.
+          - name: category
+            data_type: STRING
+            description: Product category.
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ["ELECTRONICS", "HOME", "GARDEN", "SPORTS", "BOOKS"]
+                  config: {severity: warn}
+          - name: list_price
+            data_type: NUMERIC
+            description: Current list price in the order currency.
+          - name: load_batch
+            data_type: INT64
+            description: Load batch number.
+          - name: load_ts
+            data_type: TIMESTAMP
+            description: Timestamp when the batch was loaded.
+
+      - name: shop_orders
+        description: >
+          Order headers. An order appears again in later batches when its status
+          changes (CREATED -> PAID -> SHIPPED, or CANCELLED).
+          Business key is order_id (format O + 7 digits).
+        columns:
+          - name: order_id
+            data_type: STRING
+            description: Web shop order number. Business key of the order.
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: customer_id
+            data_type: STRING
+            description: CRM customer number of the buyer.
+            data_tests:
+              - relationships:
+                  arguments:
+                    to: source('crm', 'crm_customers')
+                    field: customer_id
+                  config: {severity: warn}
+          - name: order_date
+            data_type: DATE
+            description: Date the order was placed. Never before the customer's created_at date.
+          - name: status
+            data_type: STRING
+            description: Order status.
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ["CREATED", "PAID", "SHIPPED", "CANCELLED"]
+                  config: {severity: warn}
+          - name: currency
+            data_type: STRING
+            description: ISO 4217 currency code.
+          - name: load_batch
+            data_type: INT64
+            description: Load batch number.
+          - name: load_ts
+            data_type: TIMESTAMP
+            description: Timestamp when the batch was loaded.
+
+      - name: shop_order_lines
+        description: Order lines. Inserted once with the order; never updated in this demo.
+        columns:
+          - name: order_line_id
+            data_type: STRING
+            description: Line identifier, unique within the system (order_id + '-' + line number).
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: order_id
+            data_type: STRING
+            description: Order the line belongs to.
+            data_tests:
+              - relationships:
+                  arguments:
+                    to: source('shop', 'shop_orders')
+                    field: order_id
+                  config: {severity: warn}
+          - name: product_id
+            data_type: STRING
+            description: Product ordered.
+            data_tests:
+              - relationships:
+                  arguments:
+                    to: source('shop', 'shop_products')
+                    field: product_id
+                  config: {severity: warn}
+          - name: quantity
+            data_type: INT64
+            description: Units ordered (1 or more).
+          - name: unit_price
+            data_type: NUMERIC
+            description: Price per unit at order time.
+          - name: load_batch
+            data_type: INT64
+            description: Load batch number.
+          - name: load_ts
+            data_type: TIMESTAMP
+            description: Timestamp when the batch was loaded.

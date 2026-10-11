@@ -1,0 +1,9 @@
+term,definition,columns
+Customer,"A person or business registered in the CRM, identified by the CRM customer number.","crm_customers.customer_id;hub_customer.customer_id;dim_customer.customer_id;shop_orders.customer_id"
+Active customer,"Not deleted and at least one non-cancelled order in the 90 days before the latest order date.","dim_customer.is_active"
+Customer segment,"Commercial classification: CONSUMER, SMALL_BUSINESS or ENTERPRISE.","crm_customers.segment;sat_customer_details.segment;dim_customer.segment"
+Order,"A purchase placed in the web shop, identified by order_id.","shop_orders.order_id;hub_order.order_id;fct_order_lines.order_id"
+Shipped order,"An order whose current status is SHIPPED.","fct_order_lines.status;sat_order_details.status"
+Order value,"Sum of quantity * unit_price over order lines; excludes CANCELLED orders.","fct_order_lines.line_amount"
+Product,"An item sold in the web shop, identified by product_id.","shop_products.product_id;hub_product.product_id;dim_product.product_id"
+Soft delete,"A deletion delivered by the source as is_deleted = TRUE; rows are never physically deleted.","crm_customers.is_deleted;sat_customer_details.is_deleted;dim_customer.is_deleted"

@@ -1,0 +1,184 @@
+# Data and Graph Model
+
+Reference for the tables the tutorial creates. All data is fake and deterministic (seed 42).
+
+## 1. Source data (`demo_source`)
+
+A small retail business with a CRM and a web shop, delivered in three load batches (`load_batch` 1-3, `load_ts` 2026-01-05, 2026-02-05, 2026-03-05).
+
+```mermaid
+erDiagram
+    crm_customers ||--o{ shop_orders : "customer_id"
+    shop_orders ||--|{ shop_order_lines : "order_id"
+    shop_products ||--o{ shop_order_lines : "product_id"
+
+    crm_customers {
+        STRING customer_id "BK, C000123"
+        STRING first_name
+        STRING last_name
+        STRING email
+        STRING segment "CONSUMER | SMALL_BUSINESS | ENTERPRISE"
+        STRING country
+        TIMESTAMP created_at
+        BOOL is_deleted
+        INT64 load_batch
+        TIMESTAMP load_ts
+    }
+    shop_products {
+        STRING product_id "BK, P0001"
+        STRING product_name
+        STRING category
+        NUMERIC list_price
+        INT64 load_batch
+        TIMESTAMP load_ts
+    }
+    shop_orders {
+        STRING order_id "BK, O0000001"
+        STRING customer_id "FK"
+        DATE order_date
+        STRING status "CREATED | PAID | SHIPPED | CANCELLED"
+        STRING currency
+        INT64 load_batch
+        TIMESTAMP load_ts
+    }
+    shop_order_lines {
+        STRING order_line_id "O0000001-1"
+        STRING order_id "FK"
+        STRING product_id "FK"
+        INT64 quantity
+        NUMERIC unit_price
+        INT64 load_batch
+        TIMESTAMP load_ts
+    }
+```
+
+| Table | Rows | What happens across batches |
+|---|---|---|
+| `crm_customers` | 493 | 300 → +60 → +40 new customers; 40 and 30 attribute updates; 10 and 8 unchanged reloads; 5 soft deletes |
+| `shop_products` | 46 | 40 products; 6 price changes in batch 3 |
+| `shop_orders` | 1,122 | 870 orders; status changes re-delivered in later batches |
+| `shop_order_lines` | 2,576 | 1-5 lines per order, delivered once |
+
+Expected vault sizes: `hub_customer` 400, `hub_order` 870, `hub_product` 40, `sat_customer_details` 475 (493 rows minus 18 unchanged reloads).
+
+## 2. Data Vault (`demo_vault`) and marts (`demo_mart`)
+
+```mermaid
+flowchart LR
+    subgraph src[demo_source]
+        C[crm_customers]
+        P[shop_products]
+        O[shop_orders]
+        L[shop_order_lines]
+    end
+    subgraph stg[staging views]
+        SC[stg_crm_customers]
+        SP[stg_shop_products]
+        SO[stg_shop_orders]
+        SL[stg_shop_order_lines]
+    end
+    subgraph rv[raw vault]
+        HC[hub_customer]
+        HO[hub_order]
+        HP[hub_product]
+        LOC[link_order_customer]
+        LOL[link_order_line]
+        SCD[sat_customer_details]
+        SOD[sat_order_details]
+        SPD[sat_product_details]
+        SLD[sat_order_line_details]
+    end
+    subgraph mart[demo_mart]
+        DC[dim_customer]
+        DP[dim_product]
+        F[fct_order_lines]
+    end
+    C --> SC --> HC & SCD
+    O --> SO --> HC & HO & LOC & SOD
+    P --> SP --> HP & SPD
+    L --> SL --> HO & HP & LOL & SLD
+    HC & SCD & LOC & SOD --> DC
+    HP & SPD --> DP
+    LOL & HO & LOC & SOD & SLD --> F
+```
+
+Key rules (full text in `data/docs/standard/data_vault_standards.md`):
+
+- Hash keys: `UPPER(TO_HEX(MD5(...)))` over trimmed, upper-cased values; NULL/blank → `^^`; `||` delimiter. Macros in `dbt_vault/macros/hashing.sql`.
+- Hashdiffs: same rules, columns sorted alphabetically.
+- Hubs: first-seen row per hash key from every source carrying the key (late-arriving customers from orders still get a hub row).
+- Satellites: new row only when the hashdiff changes; unchanged reloads add nothing; duplicates in a batch collapse.
+- Invalid (NULL/blank) business keys stay in staging (`is_valid_bk = FALSE`) and never reach the vault.
+
+## 3. Context graph (`demo_context`)
+
+```mermaid
+flowchart LR
+    T((BusinessTerm)) -- DESCRIBES --> COL((DataColumn))
+    O1((DataObject)) -- HAS_COLUMN --> COL
+    O1 -- FEEDS --> O2((DataObject))
+    O3((DataObject)) -- "JOINS_TO<br/>child -> parent" --> O1
+```
+
+| Table | Graph element | Key | Built from |
+|---|---|---|---|
+| `ctx_object` | Node `DataObject` | `object_id` (dbt unique_id) | sources and models in `manifest.json`; `layer` = source, staging, raw_vault, mart; `object_type` = source_table, staging_view, hub, link, satellite, dimension, fact |
+| `ctx_column` | Node `DataColumn` | `column_id` = `object_id.column` | YAML columns (`data_type`, description) |
+| `ctx_term` | Node `BusinessTerm` | `term_id` | `data/glossary.csv` |
+| `ctx_feeds` | Edge `FEEDS` parent → child | `feed_id` | `depends_on.nodes` |
+| `ctx_relationship` | Edge `JOINS_TO` child → parent | `relationship_id` | `relationships` tests (`column_name` → `field`) |
+| `ctx_has_column` | Edge `HAS_COLUMN` | (`object_id`, `column_id`) | YAML columns |
+| `ctx_describes` | Edge `DESCRIBES` | (`term_id`, `column_id`) | glossary `columns` list |
+
+Current counts: 20 objects, 130 columns, 8 terms, 27 FEEDS, 13 JOINS_TO, 20 DESCRIBES.
+
+Property graph DDL (GQL mode), generated by `de_context/graph_builder.py`:
+
+```sql
+CREATE OR REPLACE PROPERTY GRAPH demo_context.lineage_graph
+  NODE TABLES (
+    demo_context.ctx_object KEY (object_id) LABEL DataObject,
+    demo_context.ctx_column KEY (column_id) LABEL DataColumn,
+    demo_context.ctx_term   KEY (term_id)   LABEL BusinessTerm
+  )
+  EDGE TABLES (
+    demo_context.ctx_feeds KEY (feed_id)
+      SOURCE KEY (parent_id) REFERENCES ctx_object (object_id)
+      DESTINATION KEY (child_id) REFERENCES ctx_object (object_id)
+      LABEL FEEDS,
+    demo_context.ctx_relationship KEY (relationship_id)
+      SOURCE KEY (child_object_id) REFERENCES ctx_object (object_id)
+      DESTINATION KEY (parent_object_id) REFERENCES ctx_object (object_id)
+      LABEL JOINS_TO,
+    demo_context.ctx_has_column KEY (object_id, column_id)
+      SOURCE KEY (object_id) REFERENCES ctx_object (object_id)
+      DESTINATION KEY (column_id) REFERENCES ctx_column (column_id)
+      LABEL HAS_COLUMN,
+    demo_context.ctx_describes KEY (term_id, column_id)
+      SOURCE KEY (term_id) REFERENCES ctx_term (term_id)
+      DESTINATION KEY (column_id) REFERENCES ctx_column (column_id)
+      LABEL DESCRIBES
+  );
+```
+
+Example GQL used by `get_lineage` (downstream, up to 5 hops):
+
+```sql
+GRAPH demo_context.lineage_graph
+MATCH (start:DataObject {object_id: 'source.de_vault.crm.crm_customers'})-[e:FEEDS]->{1,5}(other:DataObject)
+RETURN DISTINCT other.name AS name, other.dataset AS dataset,
+       other.object_type AS object_type, other.layer AS layer
+```
+
+## 4. Document store (`demo_context.doc_chunks`)
+
+| Column | Description |
+|---|---|
+| `chunk_id` | `<file>:<n>` or `catalog:<object_id>` |
+| `doc_name` | Document title or `dataset.table` |
+| `doc_type` | Folder under `data/docs` (`standard`, `source_spec`, `glossary`, `runbook`, `guide`) or `data_catalog` |
+| `section` | `##` heading, or object type for catalog chunks |
+| `content` | Title + heading + section text |
+| `embedding` | `ARRAY<FLOAT64>` from the remote embedding model (`RETRIEVAL_DOCUMENT`) |
+
+To add your own documents, drop markdown files into `data/docs/<doc_type>/` (use `##` headings) and re-run `python setup/run_all.py --from-step 5`.

@@ -1,0 +1,12 @@
+# Agents and shared tools
+google-adk>=1.20
+google-cloud-bigquery>=3.25
+python-dotenv>=1.0
+pyyaml>=6.0
+
+# Setup: fake source data and the dbt Data Vault project
+Faker>=25.0
+dbt-bigquery>=1.8
+
+# Install the shared tools package (de_context) from this repo
+-e .

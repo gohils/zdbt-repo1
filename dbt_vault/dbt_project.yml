@@ -1,0 +1,30 @@
+# dbt project: a small Data Vault 2.0 built from the CRM and web shop sources.
+# Dataset names come from environment variables (see ../.env.example), so the
+# same project builds the main vault or a sandbox vault from synthetic data:
+#
+#   BQ_SOURCE_DATASET=demo_sandbox BQ_VAULT_DATASET=demo_sandbox_vault \
+#   BQ_MART_DATASET=demo_sandbox_vault dbt build
+name: de_vault
+version: "1.0.0"
+config-version: 2
+profile: de_vault
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  de_vault:
+    staging:
+      +schema: "{{ env_var('BQ_VAULT_DATASET', 'demo_vault') }}"
+      +materialized: view
+      +tags: ["staging"]
+    raw_vault:
+      +schema: "{{ env_var('BQ_VAULT_DATASET', 'demo_vault') }}"
+      +materialized: table
+      +tags: ["raw_vault"]
+    marts:
+      +schema: "{{ env_var('BQ_MART_DATASET', 'demo_mart') }}"
+      +materialized: table
+      +tags: ["marts"]

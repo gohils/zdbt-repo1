@@ -1,0 +1,5 @@
+# Runtime dependencies for the Cloud Run container (no dbt / Faker needed)
+google-adk>=1.20
+google-cloud-bigquery>=3.25
+python-dotenv>=1.0
+pyyaml>=6.0
